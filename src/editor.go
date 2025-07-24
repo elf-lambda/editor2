@@ -65,6 +65,7 @@ func loadFileIntoTextGrid(path string) (int, error) {
 		cursor.insert(char)
 	}
 	currentFile = path
+	fmt.Println("Loaded file: ", path)
 	printGrid(cursor)
 	return count, nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -62,6 +63,11 @@ func handleEditorInput(cursor *Cursor) {
 }
 
 func main() {
+	var file string
+	if len(os.Args) > 1 {
+		file = os.Args[1]
+		loadFileIntoTextGrid(file)
+	}
 
 	rl.InitWindow(int32(windowWidth), int32(windowHeight), "Text Editor")
 	defer rl.CloseWindow()
