@@ -4,7 +4,7 @@ A custom graphical text editor built from the ground up, implementing font rende
 
 ## Demo
 
-[Demo Video](screenshots/first.gif)
+![Demo Video](screenshots/first.gif)
 
 ## Features
 
