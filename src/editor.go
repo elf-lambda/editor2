@@ -1,22 +1,131 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"os"
 )
 
-const editorPadding int = 15
+const editorXPadding int = 5
+const editorTopPadding int = 20
+const editorBottomPadding int = 20
 
-var windowHeight int = 256
-var windowWidth int = 256
+var windowHeight int = 360
+var windowWidth int = 640
 var editorCols int = windowWidth / CHAR_IMAGE_WIDTH   // ^ ^ ^
 var editorRows int = windowHeight / CHAR_IMAGE_HEIGHT // >
 var usedRows int = 1
 
+var currentFile string = "Untitled"
 var textGrid [][]byte = getTextGrid()
+
+var cursor = &Cursor{}
+var ui = &UIState{}
+
+var editorStatus string = ""
+
+func clearTextGrid() {
+	fmt.Println("Clearing textGrid")
+	fmt.Println("Cols: ", editorCols, " Rows: ", editorRows)
+	for i := 0; i < editorCols-1; i++ {
+		for j := 0; j < usedRows; j++ {
+			textGrid[j][i] = 0
+		}
+	}
+	usedRows = 1
+}
+
+func loadFileIntoTextGrid(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return -1, err
+	}
+	defer file.Close()
+
+	clearTextGrid()
+	cursor.reset()
+	count := 0
+
+	reader := bufio.NewReader(file)
+	for {
+		char, err := reader.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return count, err
+		}
+
+		if char == '\n' {
+			cursor.enter()
+			continue
+		}
+
+		cursor.insert(char)
+	}
+	currentFile = path
+	printGrid(cursor)
+	return count, nil
+}
+
+func loadStringIntoTextGrid(content string) {
+	clearTextGrid()
+	cursor.reset()
+
+	for i := 0; i < len(content); i++ {
+		char := content[i]
+
+		if char == '\n' {
+			cursor.enter()
+			continue
+		}
+
+		cursor.insert(char)
+	}
+
+	usedRows = cursor.y + 1
+}
+
+func saveTextGridToFile(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	for y := 0; y < usedRows; y++ {
+
+		// write chars in the row
+		for x := 0; x < editorCols; x++ {
+			char := textGrid[y][x]
+			if char == 0 {
+				continue
+			}
+			writer.WriteByte(char)
+		}
+
+	}
+
+	return writer.Flush()
+}
+
+// ------------------------------------------------------------------------------------
 
 type Cursor struct {
 	x int // Cols
 	y int // Rows
+}
+
+func (c *Cursor) reset() {
+	c.x = 0
+	c.y = 0
+}
+
+func (c *Cursor) String() string {
+	return fmt.Sprintf("Cursor[%d, %d]", c.x, c.y)
 }
 
 func (c *Cursor) enter() {
@@ -41,7 +150,7 @@ func (c *Cursor) enter() {
 		textGrid[c.y][i] = 0
 	}
 
-	textGrid[c.y][c.x] = '*'
+	textGrid[c.y][c.x] = '\n'
 
 	c.y++
 	c.x = 0
@@ -73,8 +182,8 @@ func (c *Cursor) backspace() {
 			}
 		}
 
-		// if previous line ends with '*', delete it
-		if lastCharX != -1 && textGrid[prevY][lastCharX] == '*' {
+		// if previous line ends with '\n', delete it
+		if lastCharX != -1 && textGrid[prevY][lastCharX] == '\n' {
 			textGrid[prevY][lastCharX] = 0
 			lastCharX--
 		}
@@ -135,7 +244,8 @@ func (c *Cursor) moveLeft() {
 }
 
 func (c *Cursor) moveRight() {
-	if textGrid[c.y][c.x] == '*' && (textGrid[c.y][c.x+1] == 0 || textGrid[c.y][c.x+1] == '*') {
+	if textGrid[c.y][c.x] == '\n' && (textGrid[c.y][c.x+1] == 0 || textGrid[c.y][c.x+1] == '\n') {
+		// c.x++
 		return
 	}
 
@@ -145,7 +255,7 @@ func (c *Cursor) moveRight() {
 	}
 
 	// if at newline marker, move to next line
-	if c.x < editorCols && textGrid[c.y][c.x] == '*' && c.y+1 < usedRows {
+	if c.x < editorCols && textGrid[c.y][c.x] == '\n' && c.y+1 < usedRows {
 		c.y++
 		c.x = 0
 	}
@@ -185,11 +295,6 @@ func (c *Cursor) clampXToLineEnd() {
 func (c *Cursor) insert(char byte) {
 	c.checkBounds()
 
-	// if the line is full, push to next line
-	// if textGrid[c.y][editorCols-1] != 0 {
-	// 	c.enter()
-	// }
-
 	// shift characters right from the end to cursor.x
 	for i := editorCols - 1; i > c.x; i-- {
 		textGrid[c.y][i] = textGrid[c.y][i-1]
@@ -198,9 +303,6 @@ func (c *Cursor) insert(char byte) {
 	textGrid[c.y][c.x] = char
 	c.x++
 
-	// if c.x >= editorCols {
-	// 	c.enter()
-	// }
 }
 
 func (c *Cursor) checkBounds() {
@@ -269,38 +371,4 @@ func printGrid(cursor *Cursor) {
 		fmt.Println()
 	}
 	fmt.Println("------------")
-}
-
-func testCursor() {
-	cursor := &Cursor{}
-	cursor.insert('H')
-	cursor.insert('i')
-	cursor.insert('1')
-
-	printGrid(cursor)
-	cursor.enter()
-	printGrid(cursor)
-	cursor.moveUp()
-	printGrid(cursor)
-	cursor.moveDown()
-	cursor.moveDown()
-	cursor.moveRight()
-	printGrid(cursor)
-	cursor.moveUp()
-	printGrid(cursor)
-	cursor.enter()
-	cursor.moveRight()
-	printGrid(cursor)
-	cursor.enter()
-	printGrid(cursor)
-	cursor.moveRight()
-	cursor.moveRight()
-
-	cursor.moveRight()
-
-	cursor.moveRight()
-	cursor.moveRight()
-	printGrid(cursor)
-	cursor.enter()
-	printGrid(cursor)
 }
