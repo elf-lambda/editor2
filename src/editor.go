@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
 )
 
@@ -11,29 +12,59 @@ const editorXPadding int = 5
 const editorTopPadding int = 20
 const editorBottomPadding int = 20
 
-var windowHeight int = 360
-var windowWidth int = 640
+const windowHeight int = 360
+const windowWidth int = 640
+
 var editorCols int = windowWidth / CHAR_IMAGE_WIDTH   // ^ ^ ^
 var editorRows int = windowHeight / CHAR_IMAGE_HEIGHT // >
 var usedRows int = 1
 
 var currentFile string = "Untitled"
-var textGrid [][]byte = getTextGrid()
+var textGrid [][]byte = getTextGrid(editorRows, editorCols)
 
 var cursor = &Cursor{}
-var ui = &UIState{}
+var ui = &UIState{
+	CurrentView: "editor",
+}
 
 var editorStatus string = ""
 
-func clearTextGrid() {
-	fmt.Println("Clearing textGrid")
-	fmt.Println("Cols: ", editorCols, " Rows: ", editorRows)
-	for i := 0; i < editorCols-1; i++ {
-		for j := 0; j < usedRows; j++ {
-			textGrid[j][i] = 0
+func deleteFile(path string) {
+	fileName := path
+	if _, err := os.Stat(fileName); err == nil {
+		fmt.Println("Attempting to delete " + fileName)
+		copyFile(fileName, fileName+"_backup")
+		err = os.Remove(fileName)
+		if err != nil {
+			fmt.Println("Failed to delete file!")
+			return
 		}
+		fmt.Println("Deleted file: " + fileName)
 	}
+}
+
+func copyFile(src string, dst string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = os.WriteFile(dst, data, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func clearTextGrid() {
+	var editorCols_ int = windowWidth / CHAR_IMAGE_WIDTH   // ^ ^ ^
+	var editorRows_ int = windowHeight / CHAR_IMAGE_HEIGHT // >
+	fmt.Println("Resizing textGrid to Cols:", editorCols_, "Rows:", editorRows_)
+	textGrid = getTextGrid(editorRows_, editorCols_)
+	editorRows = editorRows_
+	editorCols = editorCols_
 	usedRows = 1
+	cursor.reset()
+	editorStatus = "New Buffer Created"
+	currentFile = "Untitled"
 }
 
 func loadFileIntoTextGrid(path string) (int, error) {
@@ -247,6 +278,8 @@ func (c *Cursor) moveLeft() {
 func (c *Cursor) moveRight() {
 	if textGrid[c.y][c.x] == '\n' && (textGrid[c.y][c.x+1] == 0 || textGrid[c.y][c.x+1] == '\n') {
 		// c.x++
+		c.y++
+		c.x = 0
 		return
 	}
 
@@ -346,11 +379,11 @@ func growTextGridCols() {
 	fmt.Printf("Text grid expanded to %d cols\n", editorCols)
 }
 
-func getTextGrid() [][]byte {
-	fmt.Println(editorRows, editorCols)
-	var textgrid = make([][]byte, editorRows)
+func getTextGrid(rows, cols int) [][]byte {
+	fmt.Println(rows, cols)
+	var textgrid = make([][]byte, rows)
 	for i := range textgrid {
-		textgrid[i] = make([]byte, editorCols)
+		textgrid[i] = make([]byte, cols)
 	}
 	return textgrid
 }
