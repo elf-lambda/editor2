@@ -29,6 +29,29 @@ var ui = &UIState{
 
 var editorStatus string = ""
 
+func clampName(in string, width int32, charWidth int) string {
+	maxChars := int(width) / charWidth
+
+	if len(in)*charWidth > int(width) || len(in) > maxChars {
+		if maxChars < 3 {
+			return "..."
+		}
+
+		charsToTake := maxChars
+
+		if len(in) <= charsToTake {
+			return in
+		}
+		tmp := ""
+		for i := 0; i < charsToTake && i < len(in); i++ {
+			tmp += string(in[i])
+		}
+
+		return tmp + "..."
+	}
+
+	return in
+}
 func deleteFile(path string) {
 	fileName := path
 	if _, err := os.Stat(fileName); err == nil {

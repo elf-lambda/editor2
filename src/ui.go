@@ -82,14 +82,14 @@ func DrawMenuBar(ui *UIState) {
 	menuHeight := editorTopPadding
 	rl.DrawRectangle(0, 0, int32(windowWidth), int32(menuHeight), rl.DarkBlue)
 
-	if DrawButton("File", 0, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue) {
+	if DrawButton("File", 0, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
 		if ui.ActiveMenu == "File" {
 			ui.ActiveMenu = ""
 		} else {
 			ui.ActiveMenu = "File"
 		}
 	}
-	if DrawButton("Notes", 50, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue) {
+	if DrawButton("Notes", 50, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
 		if ui.ShowNotesPanel {
 			ui.ShowNotesPanel = false
 		} else {
@@ -101,7 +101,7 @@ func DrawMenuBar(ui *UIState) {
 		}
 	}
 
-	if DrawButton("Create Note", 100, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue) {
+	if DrawButton("Create Note", 100, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
 		ui.ModalOpen = "CreateNote"
 		ui.InputBoxes = []*InputBox{
 			{
@@ -111,7 +111,7 @@ func DrawMenuBar(ui *UIState) {
 			},
 		}
 	}
-	if DrawButton("Delete Note", 220, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue) {
+	if DrawButton("Delete Note", 220, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
 		deleteFile(currentFile)
 		clearTextGrid()
 	}
@@ -122,8 +122,8 @@ func DrawMenuBar(ui *UIState) {
 }
 
 func DrawNotesPanel(ui *UIState) {
-	panelX, panelY := int32(windowWidth/2/2), int32(windowHeight/2/3)
-	panelW, panelH := int32(300), int32(250)
+	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
+	panelW, panelH := int32(400), int32(250)
 	entryHeight := int32(25)
 	maxVisible := int(panelH-60) / int(entryHeight)
 
@@ -156,7 +156,7 @@ func DrawNotesPanel(ui *UIState) {
 
 	// back Button if not root ""
 	if ui.NotesPath != "" {
-		if DrawButton("Back", panelX+10, panelY+panelH-30, 60, 20, "white", rl.DarkBlue, rl.Gray, rl.DarkGray) {
+		if DrawButton("Back", panelX+10, panelY+panelH-30, 60, 20, "white", rl.DarkBlue, rl.Gray, rl.DarkGray, true) {
 			ui.NotesPath = ""
 			ui.Notes = listNoteFiles("notes", true)
 			ui.IsFolderView = true
@@ -165,7 +165,7 @@ func DrawNotesPanel(ui *UIState) {
 		}
 	}
 
-	if DrawButton("Close", panelX+panelW-80, panelY+panelH-30, 70, 20, "white", rl.Red, rl.Gray, rl.DarkGray) {
+	if DrawButton("Close", panelX+panelW-80, panelY+panelH-30, 70, 20, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
 		ui.ShowNotesPanel = false
 		return
 	}
@@ -215,15 +215,17 @@ func DrawNotesPanel(ui *UIState) {
 		}
 		fmt.Println("len ui.notes", len(ui.Notes))
 
-		if DrawButton(entry, panelX+10, y, panelW-30, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkGray) {
+		// clamp the file name > long_file_name.txt -> long_file_n... for example
+		entryName := clampName(entry, panelW-20-(CHAR_IMAGE_WIDTH*4), CHAR_IMAGE_WIDTH)
+		if DrawButton(entryName, panelX+10, y, panelW-20, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkGray, false) {
 			if ui.IsFolderView {
-				// Folder clicked
-				ui.NotesPath = entry // like "projectA/"
+				// folder clicked
+				ui.NotesPath = entry
 				ui.Notes = listNoteFiles("notes/"+entry, false)
 				ui.IsFolderView = false
 				ui.NotesScroll = 0
 			} else {
-				// File clicked
+				// file clicked
 				fullPath := "notes/" + ui.NotesPath + entry
 				clearTextGrid()
 				loadFileIntoTextGrid(fullPath)
@@ -240,7 +242,7 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 	options := []string{"Open...", "Save", "Save As...", "New"}
 	for i, opt := range options {
 		btnY := y + int32(i*20)
-		if DrawButton(opt, x, btnY, 100, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkBlue) {
+		if DrawButton(opt, x, btnY, 100, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
 			switch opt {
 			case "Open...":
 				ui.ModalOpen = "OpenFile"
@@ -292,11 +294,11 @@ func DrawModal(ui *UIState) {
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray) {
+		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray) {
+		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 				fmt.Printf("open: %s\n", filename)
@@ -328,11 +330,11 @@ func DrawModal(ui *UIState) {
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray) {
+		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray) {
+		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 				err := saveTextGridToFile(filename)
@@ -362,11 +364,11 @@ func DrawModal(ui *UIState) {
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray) {
+		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray) {
+		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 
@@ -447,7 +449,7 @@ func DrawStatusBar(cursor Cursor) {
 	DrawText(status, 5, windowHeight-barHeight+5, CHAR_IMAGE_WIDTH, rl.DrawPixel, "white")
 }
 
-func DrawButton(label string, x, y, w, h int32, textColor_ string, pressColor, hoverColor, idleColor rl.Color) bool {
+func DrawButton(label string, x, y, w, h int32, textColor_ string, pressColor, hoverColor, idleColor rl.Color, padding bool) bool {
 	mouseX := rl.GetMouseX()
 	mouseY := rl.GetMouseY()
 	mouseOver := mouseX >= x && mouseX <= x+w && mouseY >= y && mouseY <= y+h
@@ -465,10 +467,15 @@ func DrawButton(label string, x, y, w, h int32, textColor_ string, pressColor, h
 	rl.DrawRectangle(x, y, w, h, bgColor)
 	rl.DrawRectangleLines(x, y, w, h, rl.Black)
 
-	textSize := rl.MeasureText(label, 12)
-	textX := x + (w-int32(textSize))/4
-	textY := y + (h-10)/2
-	DrawText(label, int(textX), int(textY), CHAR_IMAGE_WIDTH, rl.DrawPixel, textColor_)
+	if padding {
+		textSize := rl.MeasureText(label, 12)
+		textX := x + (w-int32(textSize))/4
+		textY := y + (h-10)/2
+		DrawText(label, int(textX), int(textY), CHAR_IMAGE_WIDTH, rl.DrawPixel, textColor_)
+	} else {
+		DrawText(label, int(x)+editorXPadding, int(y)+5, CHAR_IMAGE_WIDTH, rl.DrawPixel, textColor_)
+
+	}
 
 	return mouseOver && pressed
 }
