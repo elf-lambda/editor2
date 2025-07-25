@@ -142,6 +142,7 @@ func DrawMenuBar(ui *UIState) {
 		if strings.Contains(currentFile, "notes/") {
 			deleteFile(currentFile)
 			clearTextGrid()
+			resetUndoRedoStacks()
 		} else {
 			editorStatus = "Not a Note"
 		}
@@ -271,6 +272,7 @@ func DrawNotesPanel(ui *UIState) {
 				cursor.reset()
 				currentFile = fullPath
 				editorStatus = "Loaded Note: " + entry
+				resetUndoRedoStacks()
 				ui.ShowNotesPanel = false
 			}
 		}
@@ -358,7 +360,9 @@ func DrawFilePickerPanel(ui *UIState) {
 				currentFile = "Untitled"
 				loadStringIntoTextGrid(err.Error())
 				ensureCursorVisible(cursor)
+				resetUndoRedoStacks()
 				ui.ShowFilePicker = false
+
 				return
 			}
 			// cursor.reset()
@@ -366,6 +370,7 @@ func DrawFilePickerPanel(ui *UIState) {
 			editorStatus = "Loaded: " + ui.SelectedFile
 			ui.ShowFilePicker = false
 			ensureCursorVisible(cursor)
+			resetUndoRedoStacks()
 			return
 		}
 	}
@@ -481,9 +486,11 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 					currentFile = "Untitled"
 					loadStringIntoTextGrid(err.Error())
 					ui.ActiveMenu = ""
+					resetUndoRedoStacks()
 					return
 				}
 				editorStatus = "Saved File!"
+				resetUndoRedoStacks()
 			case "Save As...":
 				ui.ModalOpen = "SaveAs"
 				ui.InputBoxes = []*InputBox{
@@ -496,6 +503,7 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 			case "New":
 				clearTextGrid()
 				cursor.reset()
+				resetUndoRedoStacks()
 				// printGrid(cursor)
 			case "Open Pick":
 				if ui.ShowFilePicker {
@@ -553,9 +561,11 @@ func DrawModal(ui *UIState) {
 					// clearTextGrid()
 					// cursor.reset()
 					loadStringIntoTextGrid(err.Error())
+					resetUndoRedoStacks()
 					ui.ModalOpen = ""
 					return
 				}
+				resetUndoRedoStacks()
 				fmt.Println("Loaded ", res, " bytes into text grid")
 			}
 			ui.ModalOpen = ""
@@ -598,6 +608,7 @@ func DrawModal(ui *UIState) {
 					currentFile = "Untitled"
 					loadStringIntoTextGrid(err.Error())
 					ui.ModalOpen = ""
+					resetUndoRedoStacks()
 					return
 				} else {
 					fmt.Println("File saved as", filename)
@@ -701,6 +712,7 @@ func DrawModal(ui *UIState) {
 					currentFile = "Untitled"
 					loadStringIntoTextGrid(err.Error())
 					ui.ModalOpen = ""
+					resetUndoRedoStacks()
 					return
 				} else {
 					fmt.Println("File saved as", filePath)

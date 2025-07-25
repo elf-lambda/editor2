@@ -23,7 +23,7 @@ func getRowWidth(row int) int {
 		return 0
 	}
 	maxX := 0
-	for i := 0; i < editorCols; i++ {
+	for i := 0; i < visibleCols; i++ {
 		if textGrid[row][i] == '\n' {
 			return i
 		}
@@ -153,6 +153,9 @@ func handleEditorInput(cursor *Cursor) {
 		// Paste
 		if rl.IsKeyPressed(rl.KeyV) && editorClipboard != "" {
 			ensureGridCapacityForPaste(cursor.x, cursor.y, editorClipboard)
+			undoStack = append(undoStack, takeSnapshot())
+			redoStack = nil
+
 			insertStringAtCursor(editorClipboard)
 			selection.Active = false
 			ensureCursorVisible(cursor)
@@ -223,8 +226,12 @@ func handleEditorInput(cursor *Cursor) {
 
 	for char := rl.GetCharPressed(); char > 0; char = rl.GetCharPressed() {
 		if char >= 32 && char <= 126 {
+			undoStack = append(undoStack, takeSnapshot())
+			redoStack = nil
 			cursor.insert(byte(char))
 		} else {
+			undoStack = append(undoStack, takeSnapshot())
+			redoStack = nil
 			cursor.insert(byte(1))
 		}
 		ensureCursorVisible(cursor)
@@ -275,6 +282,13 @@ func handleEditorInput(cursor *Cursor) {
 			cursor.insert(' ')
 		}
 		ensureCursorVisible(cursor)
+	}
+
+	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyZ) {
+		undo()
+	}
+	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyDown(rl.KeyLeftShift) && rl.IsKeyPressed(rl.KeyZ) {
+		redo()
 	}
 
 	// ----- gen`1`
@@ -344,7 +358,7 @@ func getSelectedText() string {
 
 	for y := startY; y <= endY; y++ {
 		lineStart := 0
-		lineEnd := editorCols - 1
+		lineEnd := visibleCols - 1
 
 		if y == startY {
 			lineStart = startX

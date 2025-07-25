@@ -17,6 +17,7 @@ A custom graphical text editor built from the ground up, implementing font rende
 - **Text selection/deletion**
 - **Text copy/paste, Selection copy/paste**
 - **Daily Note Taking ui options**: Allows to automatically create dd-mm-yyyy files to take notes
+- **Undo/Redo Snapshots**: Ctrl+Z, Ctrl+Shift+Z to undo/redo changes made in the text
 
 ## Building
 

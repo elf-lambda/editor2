@@ -19,6 +19,8 @@ const editorBottomPadding int = 20
 const windowHeight int = 460
 const windowWidth int = 640
 
+var visibleCols int = windowWidth / CHAR_IMAGE_WIDTH
+var visibleRows int = windowHeight / CHAR_IMAGE_HEIGHT
 var editorCols int = windowWidth / CHAR_IMAGE_WIDTH   // ^ ^ ^
 var editorRows int = windowHeight / CHAR_IMAGE_HEIGHT // >
 var usedRows int = 1
@@ -33,6 +35,117 @@ var ui = &UIState{
 
 var editorStatus string = ""
 var editorClipboard string
+
+// ------------------------------------------------------------------------------------
+
+type EditorSnapshot struct {
+	Grid     [][]byte
+	CursorX  int
+	CursorY  int
+	UsedRows int
+	NumRows  int
+	NumCols  int
+}
+
+var undoStack []EditorSnapshot
+var redoStack []EditorSnapshot
+
+func takeSnapshot() EditorSnapshot {
+	snapshot := EditorSnapshot{
+		Grid:     make([][]byte, editorRows),
+		CursorX:  cursor.x,
+		CursorY:  cursor.y,
+		UsedRows: usedRows,
+		NumRows:  editorRows,
+		NumCols:  editorCols,
+	}
+
+	for y := 0; y < editorRows; y++ {
+		snapshot.Grid[y] = make([]byte, editorCols)
+		copy(snapshot.Grid[y], textGrid[y])
+	}
+
+	return snapshot
+}
+
+func restoreSnapshot(s EditorSnapshot) {
+	ensureTextGridRows(s.NumRows)
+	ensureTextGridCols(s.NumCols)
+
+	for y := 0; y < s.NumRows; y++ {
+		copy(textGrid[y], s.Grid[y])
+	}
+
+	cursor.x = s.CursorX
+	cursor.y = s.CursorY
+	usedRows = s.UsedRows
+	editorRows = s.NumRows
+	editorCols = s.NumCols
+
+	ensureCursorVisible(cursor)
+}
+
+func undo() {
+	if len(undoStack) == 0 {
+		return
+	}
+	last := undoStack[len(undoStack)-1]
+	undoStack = undoStack[:len(undoStack)-1]
+
+	redoStack = append(redoStack, takeSnapshot()) // Save current state to redo
+	restoreSnapshot(last)
+}
+
+func redo() {
+	if len(redoStack) == 0 {
+		return
+	}
+	last := redoStack[len(redoStack)-1]
+	redoStack = redoStack[:len(redoStack)-1]
+
+	undoStack = append(undoStack, takeSnapshot())
+	restoreSnapshot(last)
+}
+
+func ensureTextGridRows(toAtLeast int) {
+	if editorRows >= toAtLeast {
+		return
+	}
+
+	newGrid := make([][]byte, toAtLeast)
+
+	for i := 0; i < editorRows; i++ {
+		newGrid[i] = textGrid[i]
+	}
+	for i := editorRows; i < toAtLeast; i++ {
+		newGrid[i] = make([]byte, editorCols)
+	}
+
+	textGrid = newGrid
+	editorRows = toAtLeast
+	fmt.Printf("Text grid resized to %d rows\n", editorRows)
+}
+func ensureTextGridCols(toAtLeast int) {
+	if editorCols >= toAtLeast {
+		return
+	}
+
+	for i := 0; i < editorRows; i++ {
+		oldRow := textGrid[i]
+		newRow := make([]byte, toAtLeast)
+		copy(newRow, oldRow)
+		textGrid[i] = newRow
+	}
+	editorCols = toAtLeast
+	fmt.Printf("Text grid resized to %d cols\n", editorCols)
+}
+
+func resetUndoRedoStacks() {
+	undoStack = nil
+	redoStack = nil
+}
+
+// ------------------------------------------------------------------------------------
 
 // TODO: Refactor Notes to use the new FileEntry structs and functions
 type FileEntry struct {
@@ -206,8 +319,8 @@ func clearTextGrid() {
 	var editorRows_ int = windowHeight / CHAR_IMAGE_HEIGHT // >
 	fmt.Println("Resizing textGrid to Cols:", editorCols_, "Rows:", editorRows_)
 	textGrid = getTextGrid(editorRows_, editorCols_)
-	editorRows = editorRows_
-	editorCols = editorCols_
+	visibleRows = editorRows_
+	visibleCols = editorCols_
 	usedRows = 1
 	cursor.reset()
 	editorStatus = "New Buffer Created"
@@ -225,7 +338,9 @@ func loadFileIntoTextGrid(path string) (int, error) {
 	cursor.reset()
 	count := 0
 
+	x, y := 0, 0
 	reader := bufio.NewReader(file)
+
 	for {
 		char, err := reader.ReadByte()
 		if err != nil {
@@ -235,24 +350,39 @@ func loadFileIntoTextGrid(path string) (int, error) {
 			return count, err
 		}
 
-		cursor.checkBounds()
-		if char == '\n' {
-			cursor.enter()
-			continue
+		if y >= editorRows {
+			growTextGrid()
 		}
-		if char == '\t' {
-			cursor.insert(' ')
-			cursor.insert(' ')
-			cursor.insert(' ')
-			cursor.insert(' ')
-			continue
+		if x >= editorCols {
+			growTextGridCols()
 		}
 
-		cursor.insert(char)
+		switch char {
+		case '\n':
+			textGrid[y][x] = '\n'
+			x = 0
+			y++
+		case '\t':
+			for i := 0; i < 4; i++ {
+				if x >= editorCols {
+					growTextGridCols()
+				}
+				textGrid[y][x] = ' '
+				x++
+			}
+		default:
+			textGrid[y][x] = char
+			x++
+		}
+
+		count++
 	}
+
+	cursor.x = 0
+	cursor.y = 0
+	usedRows = y + 1
 	currentFile = path
 	fmt.Println("Loaded file: ", path)
-	// printGrid(cursor)
 	return count, nil
 }
 
@@ -414,6 +544,9 @@ func (c *Cursor) backspace() {
 		c.x = endX
 		c.y = endY
 
+		undoStack = append(undoStack, takeSnapshot())
+		redoStack = nil
+
 		// repeatedly call single-character backspace until we reach selection start
 		for c.y > startY || (c.y == startY && c.x > startX) {
 			c.backspaceSingle()
@@ -442,7 +575,8 @@ func (c *Cursor) backspace() {
 		ensureCursorVisible(c)
 		return
 	}
-
+	undoStack = append(undoStack, takeSnapshot())
+	redoStack = nil
 	// regular backspace if no selection
 	c.backspaceSingle()
 	ensureCursorVisible(c)
@@ -618,7 +752,7 @@ func (c *Cursor) clampXToLineEnd() {
 	if c.x > maxX {
 		c.x = maxX - 1
 	}
-	c.x = maxX - 1
+	c.x = maxX
 }
 
 func (c *Cursor) insert(char byte) {
@@ -640,6 +774,23 @@ func (c *Cursor) checkBounds() {
 	}
 	if c.x >= editorCols {
 		growTextGridCols()
+	}
+}
+
+func clampCursor() {
+	if cursor.y >= usedRows {
+		cursor.y = usedRows - 1
+	}
+	if cursor.y < 0 {
+		cursor.y = 0
+	}
+
+	lineLen := getRowWidth(cursor.y)
+	if cursor.x > lineLen {
+		cursor.x = lineLen
+	}
+	if cursor.x < 0 {
+		cursor.x = 0
 	}
 }
 

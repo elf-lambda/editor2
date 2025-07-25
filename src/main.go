@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
 	"os"
 	"sync"
 
@@ -9,6 +10,10 @@ import (
 )
 
 func main() {
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
+
 	var file string
 	if len(os.Args) > 1 {
 		file = os.Args[1]
@@ -42,7 +47,7 @@ func main() {
 				gridX += scrollOffsetX
 				gridY += scrollOffsetY
 
-				if gridX >= 0 && gridX < editorCols && gridY >= 0 && gridY < editorRows {
+				if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
 					cursor.MoveToClick(gridX, gridY)
 
 					selection.Active = true
@@ -63,7 +68,7 @@ func main() {
 				gridX += scrollOffsetX
 				gridY += scrollOffsetY
 
-				if gridX >= 0 && gridX < editorCols && gridY >= 0 && gridY < editorRows {
+				if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
 					selection.EndX = gridX
 					selection.EndY = gridY
 				}
@@ -72,7 +77,14 @@ func main() {
 			if rl.IsMouseButtonReleased(rl.MouseLeftButton) && selection.Active {
 				if selection.StartX == selection.EndX && selection.StartY == selection.EndY {
 					selection.Active = false // No drag = no selection
+					// ensureCursorVisible(cursor)
+					clampCursor()
+					continue
 				}
+				cursor.x = selection.EndX
+				cursor.y = selection.EndY
+				clampCursor()
+				// ensureCursorVisible(cursor)
 			}
 
 		}
