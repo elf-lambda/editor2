@@ -318,7 +318,7 @@ func DrawFilePickerPanel(ui *UIState) {
 
 	// show current path
 	if ui.CurrentPath == "" {
-		ui.CurrentPath, _ = filepath.Abs("/home/void/editor2") // Start here TODO: rework
+		ui.CurrentPath, _ = filepath.Abs(".") // Start here TODO: rework
 	}
 
 	DrawText("Path: "+ui.CurrentPath, int(panelX)+16, int(panelY)+35, 8, rl.DrawPixel, "white")
