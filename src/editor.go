@@ -6,13 +6,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 )
 
 const editorXPadding int = 5
-const editorTopPadding int = 20
+const editorYPadding int = 5
+const editorTopPadding int = 30
 const editorBottomPadding int = 20
 
-const windowHeight int = 360
+const windowHeight int = 460
 const windowWidth int = 640
 
 var editorCols int = windowWidth / CHAR_IMAGE_WIDTH   // ^ ^ ^
@@ -28,6 +32,125 @@ var ui = &UIState{
 }
 
 var editorStatus string = ""
+var editorClipboard string
+
+// TODO: Refactor Notes to use the new FileEntry structs and functions
+type FileEntry struct {
+	Name     string
+	IsFolder bool
+}
+
+func listAllFiles(dir string) []FileEntry {
+	if dir == "" {
+		dir = "."
+	}
+
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var entries []FileEntry
+
+	// add folders first
+	for _, f := range files {
+		if f.IsDir() {
+			entries = append(entries, FileEntry{
+				Name:     f.Name(),
+				IsFolder: true,
+			})
+		}
+	}
+
+	// files last
+	for _, f := range files {
+		if !f.IsDir() {
+			entries = append(entries, FileEntry{
+				Name:     f.Name(),
+				IsFolder: false,
+			})
+		}
+	}
+
+	return entries
+}
+
+func ensureGridCapacityForPaste(startX, startY int, content string) {
+	lines := strings.Split(content, "\n")
+	requiredRows := startY + len(lines)
+	maxLineLen := 0
+	for _, line := range lines {
+		if len(line) > maxLineLen {
+			maxLineLen = len(line)
+		}
+	}
+	requiredCols := startX + maxLineLen
+
+	// grow rows if needed
+	for len(textGrid) < requiredRows {
+		textGrid = append(textGrid, make([]byte, editorCols))
+		editorRows++
+	}
+
+	// grow columns if needed
+	if requiredCols > editorCols {
+		for i := range textGrid {
+			newRow := make([]byte, requiredCols)
+			copy(newRow, textGrid[i])
+			textGrid[i] = newRow
+		}
+		editorCols = requiredCols
+	}
+}
+
+func insertStringAtCursor(s string) {
+	ensureCursorVisible(cursor)
+	for i := 0; i < len(s); i++ {
+		cursor.checkBounds()
+		ch := s[i]
+		if ch == '\n' {
+			cursor.enter()
+		} else if ch == '\t' {
+			cursor.insert(' ')
+			cursor.insert(' ')
+			cursor.insert(' ')
+			cursor.insert(' ')
+		} else {
+			cursor.insert(ch)
+		}
+	}
+	// cursor.enter()
+}
+func insertStringAt(x, y int, s string) {
+	cursor.x = x
+	cursor.y = y
+
+	insertStringAtCursor(s)
+
+	usedRows = max(usedRows, cursor.y+1)
+}
+
+func listNoteFiles(dir string, foldersOnly bool) []string {
+	// Old --- to refactor
+	os.MkdirAll("notes", os.ModePerm)
+
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var entries []string
+	for _, f := range files {
+		if foldersOnly && f.IsDir() {
+			entries = append(entries, f.Name()+"/")
+		} else if !foldersOnly && !f.IsDir() && filepath.Ext(f.Name()) == ".txt" {
+			entries = append(entries, f.Name())
+		}
+	}
+
+	slices.Reverse(entries)
+	fmt.Println(entries)
+	return entries
+}
 
 func clampName(in string, width int32, charWidth int) string {
 	maxChars := int(width) / charWidth
@@ -111,8 +234,16 @@ func loadFileIntoTextGrid(path string) (int, error) {
 			return count, err
 		}
 
+		cursor.checkBounds()
 		if char == '\n' {
 			cursor.enter()
+			continue
+		}
+		if char == '\t' {
+			cursor.insert(' ')
+			cursor.insert(' ')
+			cursor.insert(' ')
+			cursor.insert(' ')
 			continue
 		}
 
@@ -120,7 +251,7 @@ func loadFileIntoTextGrid(path string) (int, error) {
 	}
 	currentFile = path
 	fmt.Println("Loaded file: ", path)
-	printGrid(cursor)
+	// printGrid(cursor)
 	return count, nil
 }
 
@@ -169,6 +300,16 @@ func saveTextGridToFile(path string) error {
 
 // ------------------------------------------------------------------------------------
 
+type Selection struct {
+	Active bool
+	StartX int
+	StartY int
+	EndX   int
+	EndY   int
+}
+
+var selection Selection
+
 type Cursor struct {
 	x int // Cols
 	y int // Rows
@@ -181,6 +322,38 @@ func (c *Cursor) reset() {
 
 func (c *Cursor) String() string {
 	return fmt.Sprintf("Cursor[%d, %d]", c.x, c.y)
+}
+
+func (c *Cursor) MoveToClick(x, y int) {
+	// if cell has character, just move there
+	if textGrid[y][x] != 0 {
+		c.x = x
+		c.y = y
+		return
+	}
+
+	// look left in the same line
+	for i := x - 1; i >= 0; i-- {
+		if textGrid[y][i] != 0 {
+			c.x = i
+			c.y = y
+			return
+		}
+	}
+
+	// look upward
+	for j := y - 1; j >= 0; j-- {
+		for i := editorCols - 1; i >= 0; i-- {
+			if textGrid[j][i] != 0 {
+				c.x = i
+				c.y = j
+				return
+			}
+		}
+	}
+
+	// fallback, no idea if this can be reached :)
+	c.reset()
 }
 
 func (c *Cursor) enter() {
@@ -214,6 +387,57 @@ func (c *Cursor) enter() {
 }
 
 func (c *Cursor) backspace() {
+	if selection.Active {
+		// if we have a selection
+
+		startX, startY := selection.StartX, selection.StartY
+		endX, endY := selection.EndX, selection.EndY
+
+		// normalize selection
+		if startY > endY || (startY == endY && startX > endX) {
+			startX, endX = endX, startX
+			startY, endY = endY, startY
+		}
+
+		// move cursor to end of selection
+		c.x = endX
+		c.y = endY
+
+		// repeatedly call single-character backspace until we reach selection start
+		for c.y > startY || (c.y == startY && c.x > startX) {
+			c.backspaceSingle()
+		}
+		// recalculate usedRows after deletion
+		usedRows = 0
+		for y := editorRows - 1; y >= 0; y-- {
+			nonEmpty := false
+			for x := 0; x < editorCols; x++ {
+				if textGrid[y][x] != 0 {
+					nonEmpty = true
+					break
+				}
+			}
+			if nonEmpty {
+				usedRows = y + 1
+				break
+			}
+		}
+		if usedRows == 0 {
+			usedRows = 1
+		}
+		// TODO: Maybe recalculate columns aswell?
+
+		selection.Active = false
+		ensureCursorVisible(c)
+		return
+	}
+
+	// regular backspace if no selection
+	c.backspaceSingle()
+	ensureCursorVisible(c)
+}
+
+func (c *Cursor) backspaceSingle() {
 	// if in line or end
 	if c.x > 0 {
 		c.x--
@@ -243,7 +467,7 @@ func (c *Cursor) backspace() {
 			lastCharX--
 		}
 
-		// compact current line (ignore 0s)
+		// compact current line
 		var compacted []byte
 		for i := 0; i < editorCols; i++ {
 			if textGrid[c.y][i] != 0 {
@@ -323,7 +547,12 @@ func (c *Cursor) moveUp() {
 
 	if c.y > 0 {
 		c.y--
-		c.clampXToLineEnd()
+		if c.x > editorCols {
+			c.clampXToLineEnd()
+		}
+		if textGrid[c.y][c.x] == 0 {
+			c.clampXToLineEnd()
+		}
 	}
 	fmt.Println(c)
 }
@@ -332,7 +561,12 @@ func (c *Cursor) moveDown() {
 
 	if c.y < usedRows-1 {
 		c.y++
-		c.clampXToLineEnd()
+		if c.x > editorCols {
+			c.clampXToLineEnd()
+		}
+		if textGrid[c.y][c.x] == 0 {
+			c.clampXToLineEnd()
+		}
 	}
 	fmt.Println(c)
 }
@@ -345,8 +579,9 @@ func (c *Cursor) clampXToLineEnd() {
 		}
 	}
 	if c.x > maxX {
-		c.x = maxX
+		c.x = maxX - 1
 	}
+	c.x = maxX - 1
 }
 
 func (c *Cursor) insert(char byte) {

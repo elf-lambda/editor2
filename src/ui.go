@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -19,6 +20,12 @@ type UIState struct {
 	NotesScroll    int
 	NotesPath      string
 	IsFolderView   bool
+
+	ShowFilePicker   bool
+	FileEntries      []FileEntry
+	CurrentPath      string
+	SelectedFile     string
+	SelectedIsFolder bool
 }
 
 type InputBox struct {
@@ -28,35 +35,51 @@ type InputBox struct {
 	MaxChars int
 }
 
-func listNoteFiles(dir string, foldersOnly bool) []string {
-	os.MkdirAll("notes", os.ModePerm)
+// new "modern" colors - basically the theme
+var (
+	ModernDarkBg     = rl.NewColor(30, 32, 60, 255)    // Dark background
+	ModernDarkButton = rl.NewColor(30, 32, 48, 150)    // Dark button
+	ModernDark       = rl.NewColor(30, 32, 48, 255)    // Dark background
+	ModernMedium     = rl.NewColor(52, 58, 84, 255)    // Medium background
+	ModernLight      = rl.NewColor(73, 82, 122, 255)   // Light accent
+	ModernAccent     = rl.NewColor(108, 117, 255, 255) // Primary accent
+	ModernSuccess    = rl.NewColor(72, 187, 120, 255)  // Success green
+	ModernDanger     = rl.NewColor(245, 101, 101, 255) // Danger red
+	ModernText       = rl.NewColor(226, 232, 240, 255) // Light text
+	ModernTextDim    = rl.NewColor(160, 174, 192, 255) // Dimmed text
+	ModernShadow     = rl.NewColor(0, 0, 0, 50)        // Subtle shadow
+)
 
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
+func drawShadow(x, y, width, height, offset, blur float32) {
+	// just draw multiple rectangles with lowered alpha to create blur effect
+	for i := 0; i < int(blur); i++ {
+		alpha := uint8(float32(ModernShadow.A) * (1.0 - float32(i)/blur))
+		shadowColor := rl.NewColor(0, 0, 0, alpha)
+		rl.DrawRectangle(int32(x+offset+float32(i)), int32(y+offset+float32(i)), int32(width), int32(height), shadowColor)
 	}
-	var entries []string
-	for _, f := range files {
-		if foldersOnly && f.IsDir() {
-			entries = append(entries, f.Name()+"/")
-		} else if !foldersOnly && !f.IsDir() && filepath.Ext(f.Name()) == ".txt" {
-			entries = append(entries, f.Name())
-		}
-	}
-
-	fmt.Println(entries)
-	return entries
 }
 
 func (box *InputBox) Draw() {
-	bg := rl.DarkBrown
+	// draw shadow
+	drawShadow(box.Rect.X, box.Rect.Y, box.Rect.Width, box.Rect.Height, 2, 3)
+
+	bg := ModernMedium
 	if box.Focused {
-		bg = rl.LightGray
+		bg = ModernLight
 	}
 
-	rl.DrawRectangleRec(box.Rect, bg)
-	rl.DrawRectangleLines(int32(box.Rect.X), int32(box.Rect.Y), int32(box.Rect.Width), int32(box.Rect.Height), rl.Black)
-	DrawText(box.Text, int(box.Rect.X)+5, int(box.Rect.Y)+5, 10, rl.DrawPixel, "black")
+	// draw panel
+	rl.DrawRectangle(int32(box.Rect.X), int32(box.Rect.Y), int32(box.Rect.Width), int32(box.Rect.Height), bg)
+
+	// draw border
+	borderColor := ModernLight
+	if box.Focused {
+		borderColor = ModernAccent
+	}
+	rl.DrawRectangleLines(int32(box.Rect.X), int32(box.Rect.Y), int32(box.Rect.Width), int32(box.Rect.Height), borderColor)
+
+	// draw text with better positioning
+	DrawText(box.Text, int(box.Rect.X)+12, int(box.Rect.Y)+8, 10, rl.DrawPixel, "white")
 }
 
 func (box *InputBox) HandleInput() {
@@ -71,8 +94,9 @@ func (box *InputBox) HandleInput() {
 			}
 			char = rl.GetCharPressed()
 		}
-		if rl.IsKeyPressed(rl.KeyBackspace) && len(box.Text) > 0 {
+		if (rl.IsKeyPressed(rl.KeyBackspace) || rl.IsKeyDown(rl.KeyBackspace)) && len(box.Text) > 0 {
 			box.Text = box.Text[:len(box.Text)-1]
+			time.Sleep(150 * time.Millisecond)
 			return
 		}
 	}
@@ -80,16 +104,19 @@ func (box *InputBox) HandleInput() {
 
 func DrawMenuBar(ui *UIState) {
 	menuHeight := editorTopPadding
-	rl.DrawRectangle(0, 0, int32(windowWidth), int32(menuHeight), rl.DarkBlue)
 
-	if DrawButton("File", 0, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
+	// Modern gradient-like background
+	rl.DrawRectangle(0, 0, int32(windowWidth), int32(menuHeight), ModernDark)
+	rl.DrawRectangle(0, int32(menuHeight-2), int32(windowWidth), 2, ModernAccent)
+
+	if DrawModernButton("File", 10, 6, 60, int32(menuHeight-12), ModernText, ModernAccent, ModernLight, ModernDark, true) {
 		if ui.ActiveMenu == "File" {
 			ui.ActiveMenu = ""
 		} else {
 			ui.ActiveMenu = "File"
 		}
 	}
-	if DrawButton("Notes", 50, 0, 50, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
+	if DrawModernButton("Notes", 80, 6, 70, int32(menuHeight-12), ModernText, ModernAccent, ModernLight, ModernDark, true) {
 		if ui.ShowNotesPanel {
 			ui.ShowNotesPanel = false
 		} else {
@@ -101,31 +128,35 @@ func DrawMenuBar(ui *UIState) {
 		}
 	}
 
-	if DrawButton("Create Note", 100, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
+	if DrawModernButton("Create Note", 160, 6, 110, int32(menuHeight-12), ModernText, ModernSuccess, ModernLight, ModernDark, true) {
 		ui.ModalOpen = "CreateNote"
 		ui.InputBoxes = []*InputBox{
 			{
-				Rect:     rl.NewRectangle(150, 150, 300, 30),
+				Rect:     rl.NewRectangle(150, 150, 300, 40),
 				Text:     "",
 				MaxChars: 64,
 			},
 		}
 	}
-	if DrawButton("Delete Note", 220, 0, 120, int32(menuHeight), "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
-		deleteFile(currentFile)
-		clearTextGrid()
+	if DrawModernButton("Delete Note", 280, 6, 110, int32(menuHeight-12), ModernText, ModernDanger, ModernLight, ModernDark, true) {
+		if strings.Contains(currentFile, "notes/") {
+			deleteFile(currentFile)
+			clearTextGrid()
+		} else {
+			editorStatus = "Not a Note"
+		}
 	}
 
 	if ui.ActiveMenu == "File" {
-		DrawDropdown("File", 0, int32(menuHeight), ui)
+		DrawDropdown("File", 10, int32(menuHeight), ui)
 	}
 }
 
 func DrawNotesPanel(ui *UIState) {
 	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
-	panelW, panelH := int32(400), int32(250)
-	entryHeight := int32(25)
-	maxVisible := int(panelH-60) / int(entryHeight)
+	panelW, panelH := int32(400), int32(300)
+	entryHeight := int32(28)
+	maxVisible := int(panelH-80) / int(entryHeight)
 
 	// mouse wheel scrolling
 	mouseWheel := rl.GetMouseWheelMove()
@@ -136,7 +167,7 @@ func DrawNotesPanel(ui *UIState) {
 		if mouseX >= panelX && mouseX <= panelX+panelW && mouseY >= panelY && mouseY <= panelY+panelH {
 			ui.NotesScroll -= int(mouseWheel)
 
-			// Clamp scroll bounds
+			// clamp scroll bounds
 			maxScroll := len(ui.Notes) - maxVisible
 			if maxScroll < 0 {
 				maxScroll = 0
@@ -150,13 +181,23 @@ func DrawNotesPanel(ui *UIState) {
 		}
 	}
 
-	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.DarkGray)
-	rl.DrawRectangleLines(panelX, panelY, panelW, panelH, rl.Black)
-	DrawText("Notes", int(panelX)+10, int(panelY)+10, 10, rl.DrawPixel, "white")
+	// draw shadow
+	drawShadow(float32(panelX), float32(panelY), float32(panelW), float32(panelH), 3, 4)
+
+	// draw panel
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, ModernMedium)
+
+	// draw border around the entire panel
+	rl.DrawRectangleLines(panelX, panelY, panelW, panelH, rl.DarkGray)
+
+	// header section
+	rl.DrawRectangle(panelX, panelY, panelW, 50, ModernDark)
+
+	DrawText("Notes", int(panelX)+16, int(panelY)+16, 12, rl.DrawPixel, "white")
 
 	// back Button if not root ""
 	if ui.NotesPath != "" {
-		if DrawButton("Back", panelX+10, panelY+panelH-30, 60, 20, "white", rl.DarkBlue, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Back", panelX+16, panelY+panelH-30, 70, 24, ModernText, ModernAccent, ModernLight, ModernDarkButton, true) {
 			ui.NotesPath = ""
 			ui.Notes = listNoteFiles("notes", true)
 			ui.IsFolderView = true
@@ -165,29 +206,27 @@ func DrawNotesPanel(ui *UIState) {
 		}
 	}
 
-	if DrawButton("Close", panelX+panelW-80, panelY+panelH-30, 70, 20, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
+	if DrawModernButton("Close", panelX+panelW-86, panelY+panelH-30, 70, 24, ModernText, ModernDanger, ModernLight, ModernDarkButton, true) {
 		ui.ShowNotesPanel = false
 		return
 	}
 
 	// draw scroll bar if there are more items than visible
 	if len(ui.Notes) > maxVisible {
-		scrollBarX := panelX + panelW - 15
-		scrollBarY := panelY + 30
-		scrollBarH := panelH - 70
+		scrollBarX := panelX + panelW - 12
+		scrollBarY := panelY + 60
+		scrollBarH := panelH - 110
 
-		rl.DrawRectangle(scrollBarX, scrollBarY, 10, int32(scrollBarH), rl.Gray)
+		// scroll track
+		rl.DrawRectangle(scrollBarX, scrollBarY, 6, scrollBarH, rl.Gray)
 
-		// calculate scroll thumb position and size
-		if len(ui.Notes) > 0 {
-			thumbHeight := int32(float32(scrollBarH) * float32(maxVisible) / float32(len(ui.Notes)))
-			if thumbHeight < 10 {
-				thumbHeight = 10
-			}
-			thumbY := scrollBarY + int32(float32(scrollBarH-int32(thumbHeight))*float32(ui.NotesScroll)/float32(len(ui.Notes)-maxVisible))
+		// scroll thumb
+		thumbHeight := int32(30)
+		maxScroll := len(ui.Notes) - maxVisible
+		scrollRatio := float32(ui.NotesScroll) / float32(maxScroll)
+		thumbY := scrollBarY + int32(scrollRatio*float32(scrollBarH-thumbHeight))
 
-			rl.DrawRectangle(scrollBarX+1, thumbY, 8, thumbHeight, rl.LightGray)
-		}
+		rl.DrawRectangle(scrollBarX, thumbY, 6, thumbHeight, rl.White)
 	}
 
 	// visible list
@@ -196,12 +235,12 @@ func DrawNotesPanel(ui *UIState) {
 	if endIdx > len(ui.Notes) {
 		endIdx = len(ui.Notes)
 	}
-	// ui.Notes = listNoteFiles("notes", true)
-	fmt.Println("startIDx =", startIdx)
-	fmt.Println("endidx =", endIdx)
-	fmt.Println("len ui.notes", len(ui.Notes))
+
+	// fmt.Println("startIDx =", startIdx)
+	// fmt.Println("endidx =", endIdx)
+	// fmt.Println("len ui.notes", len(ui.Notes))
 	for i := startIdx; i < endIdx; i++ {
-		y := panelY + 30 + int32((i-startIdx)*int(entryHeight))
+		y := panelY + 60 + int32((i-startIdx)*int(entryHeight))
 		var entry string
 
 		if len(ui.Notes) == 0 {
@@ -213,11 +252,11 @@ func DrawNotesPanel(ui *UIState) {
 		} else {
 			entry = ui.Notes[i]
 		}
-		fmt.Println("len ui.notes", len(ui.Notes))
+		// fmt.Println("len ui.notes", len(ui.Notes))
 
 		// clamp the file name > long_file_name.txt -> long_file_n... for example
-		entryName := clampName(entry, panelW-20-(CHAR_IMAGE_WIDTH*4), CHAR_IMAGE_WIDTH)
-		if DrawButton(entryName, panelX+10, y, panelW-20, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkGray, false) {
+		entryName := clampName(entry, panelW-40-(CHAR_IMAGE_WIDTH*4), CHAR_IMAGE_WIDTH)
+		if DrawModernButton(entryName, panelX+16, y, panelW-32, 24, ModernText, ModernAccent, ModernLight, ModernMedium, false) {
 			if ui.IsFolderView {
 				// folder clicked
 				ui.NotesPath = entry
@@ -236,19 +275,183 @@ func DrawNotesPanel(ui *UIState) {
 			}
 		}
 	}
+	ensureCursorVisible(cursor)
+}
+
+func DrawFilePickerPanel(ui *UIState) {
+	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
+	panelW, panelH := int32(400), int32(300)
+	entryHeight := int32(28)
+	maxVisible := int(panelH-80) / int(entryHeight)
+
+	// mouse wheel scrolling
+	mouseWheel := rl.GetMouseWheelMove()
+	if mouseWheel != 0 {
+		mouseX := rl.GetMouseX()
+		mouseY := rl.GetMouseY()
+		if mouseX >= panelX && mouseX <= panelX+panelW && mouseY >= panelY && mouseY <= panelY+panelH {
+			ui.NotesScroll -= int(mouseWheel)
+
+			maxScroll := len(ui.FileEntries) - maxVisible
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if ui.NotesScroll < 0 {
+				ui.NotesScroll = 0
+			}
+			if ui.NotesScroll > maxScroll {
+				ui.NotesScroll = maxScroll
+			}
+		}
+	}
+
+	// draw shadow
+	drawShadow(float32(panelX), float32(panelY), float32(panelW), float32(panelH), 4, 8)
+
+	// draw panel
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, ModernMedium)
+	rl.DrawRectangleLines(panelX, panelY, panelW, panelH, rl.DarkGray)
+
+	// header section
+	rl.DrawRectangle(panelX, panelY, panelW, 50, ModernDark)
+	DrawText("File Picker", int(panelX)+16, int(panelY)+16, 12, rl.DrawPixel, "white")
+
+	// show current path
+	if ui.CurrentPath == "" {
+		ui.CurrentPath, _ = filepath.Abs("/home/void/editor2") // Start here TODO: rework
+	}
+
+	DrawText("Path: "+ui.CurrentPath, int(panelX)+16, int(panelY)+35, 8, rl.DrawPixel, "white")
+
+	// back button (if not at root)
+	if ui.CurrentPath != "/" {
+		if DrawModernButton("Back", panelX+16, panelY+panelH-30, 70, 24, ModernText, ModernAccent, ModernLight, ModernDark, true) {
+			// Go up one directory
+			if strings.Contains(ui.CurrentPath, "/") {
+				ui.CurrentPath = filepath.Dir(ui.CurrentPath)
+				if ui.CurrentPath == "." {
+					ui.CurrentPath = ""
+				}
+			} else {
+				ui.CurrentPath = ""
+			}
+			ui.FileEntries = listAllFiles(ui.CurrentPath)
+			ui.NotesScroll = 0
+			return
+		}
+	}
+
+	// close button
+	if DrawModernButton("Close", panelX+panelW-86, panelY+panelH-30, 70, 24, ModernText, ModernDanger, ModernLight, ModernDark, true) {
+		ui.ShowFilePicker = false
+		return
+	}
+
+	// select button (only show if we have a selected file)
+	if ui.SelectedFile != "" && !ui.SelectedIsFolder {
+		if DrawModernButton("Select", panelX+panelW-166, panelY+panelH-30, 70, 24, ModernText, ModernSuccess, ModernLight, ModernDark, true) {
+			// handle file selection here
+			fullPath := filepath.Join(ui.CurrentPath, ui.SelectedFile)
+			// clearTextGrid()
+			loadFileIntoTextGrid(fullPath)
+			// cursor.reset()
+			currentFile = fullPath
+			editorStatus = "Loaded: " + ui.SelectedFile
+			ui.ShowFilePicker = false
+			ensureCursorVisible(cursor)
+			return
+		}
+	}
+
+	// scroll bar
+	if len(ui.FileEntries) > maxVisible {
+		scrollBarX := panelX + panelW - 12
+		scrollBarY := panelY + 60
+		scrollBarH := panelH - 110
+
+		rl.DrawRectangle(scrollBarX, scrollBarY, 6, scrollBarH, rl.Gray)
+
+		thumbHeight := int32(30)
+		maxScroll := len(ui.FileEntries) - maxVisible
+		scrollRatio := float32(ui.NotesScroll) / float32(maxScroll)
+		thumbY := scrollBarY + int32(scrollRatio*float32(scrollBarH-thumbHeight))
+		rl.DrawRectangle(scrollBarX, thumbY, 6, thumbHeight, rl.White)
+	}
+
+	// file/folder list
+	startIdx := ui.NotesScroll
+	endIdx := startIdx + maxVisible
+	if endIdx > len(ui.FileEntries) {
+		endIdx = len(ui.FileEntries)
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		if i >= len(ui.FileEntries) {
+			continue
+		}
+
+		entry := ui.FileEntries[i]
+		y := panelY + 60 + int32((i-startIdx)*int(entryHeight))
+
+		// different styling for folders vs files
+		var displayName string
+		var textColor rl.Color = ModernText
+
+		if entry.IsFolder {
+			displayName = "[dir] " + entry.Name
+			textColor = ModernAccent
+		} else {
+			displayName = "[file] " + entry.Name
+		}
+
+		// highlight selected item
+		bgColor := ModernMedium
+		if ui.SelectedFile == entry.Name {
+			bgColor = ModernLight
+		}
+
+		// draw all elements (files/folders)
+		// entryName := clampName(displayName, panelW-50-(CHAR_IMAGE_WIDTH*4), CHAR_IMAGE_WIDTH)
+		entryName := clampName(displayName, panelW-40-(CHAR_IMAGE_WIDTH*4), CHAR_IMAGE_WIDTH)
+		// if DrawModernButton(entryName, panelX+16, y, panelW-32, 24, ModernText, ModernAccent, ModernLight, ModernMedium, false) {
+
+		if DrawModernButton(entryName, panelX+16, y, panelW-32, 24, textColor, ModernAccent, ModernLight, bgColor, false) {
+			ui.SelectedFile = entry.Name
+			ui.SelectedIsFolder = entry.IsFolder
+
+			if entry.IsFolder {
+				// Double-click or enter folder
+				ui.CurrentPath = filepath.Join(ui.CurrentPath, entry.Name)
+				ui.FileEntries = listAllFiles(ui.CurrentPath)
+				ui.NotesScroll = 0
+				ui.SelectedFile = ""
+				ui.SelectedIsFolder = false
+			}
+		}
+	}
+
 }
 
 func DrawDropdown(menu string, x, y int32, ui *UIState) {
-	options := []string{"Open...", "Save", "Save As...", "New"}
+	options := []string{"Open...", "Open Pick", "Save", "Save As...", "New"}
+	dropdownW := int32(120)
+	dropdownH := int32(len(options) * 32)
+
+	// draw shadow
+	drawShadow(float32(x), float32(y), float32(dropdownW), float32(dropdownH), 2, 4)
+
+	// draw dropdown panel
+	rl.DrawRectangle(x, y, dropdownW, dropdownH, ModernMedium)
+
 	for i, opt := range options {
-		btnY := y + int32(i*20)
-		if DrawButton(opt, x, btnY, 100, 20, "white", rl.DarkGreen, rl.Gray, rl.DarkBlue, true) {
+		btnY := y + int32(i*32)
+		if DrawModernButton(opt, x+4, btnY+4, dropdownW-8, 24, ModernText, ModernAccent, ModernLight, ModernMedium, true) {
 			switch opt {
 			case "Open...":
 				ui.ModalOpen = "OpenFile"
 				ui.InputBoxes = []*InputBox{
 					{
-						Rect:     rl.NewRectangle(150, 150, 300, 30),
+						Rect:     rl.NewRectangle(150, 150, 300, 40),
 						Text:     "",
 						MaxChars: 64,
 					},
@@ -261,7 +464,7 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 				ui.ModalOpen = "SaveAs"
 				ui.InputBoxes = []*InputBox{
 					{
-						Rect:     rl.NewRectangle(150, 150, 300, 30),
+						Rect:     rl.NewRectangle(150, 150, 300, 40),
 						Text:     "",
 						MaxChars: 64,
 					},
@@ -269,8 +472,16 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 			case "New":
 				clearTextGrid()
 				cursor.reset()
-
-				printGrid(cursor)
+				// printGrid(cursor)
+			case "Open Pick":
+				if ui.ShowFilePicker {
+					ui.ShowFilePicker = false
+				} else {
+					ui.ShowFilePicker = true
+					ui.CurrentPath = ""
+					ui.FileEntries = listAllFiles(".")
+					ui.NotesScroll = 0
+				}
 			}
 			ui.ActiveMenu = ""
 		}
@@ -284,21 +495,31 @@ func DrawModal(ui *UIState) {
 		modalW := int32(windowWidth - 200)
 		modalH := int32(windowHeight - 150)
 
-		rl.DrawRectangle(modalX, modalY, modalW, modalH, rl.DarkBrown)
-		rl.DrawRectangleLines(modalX, modalY, modalW, modalH, rl.Black)
+		// TODO: Rework this
+		// draw modal blur
+		rl.DrawRectangle(0, 0, int32(windowWidth), int32(windowHeight), rl.NewColor(0, 0, 0, 128))
 
-		DrawText("Open File", int(modalX)+10, int(modalY)+10, 10, rl.DrawPixel, "black")
+		// draw shadow
+		drawShadow(float32(modalX), float32(modalY), float32(modalW), float32(modalH), 6, 12)
+
+		// draw modal panel
+		rl.DrawRectangle(modalX, modalY, modalW, modalH, ModernMedium)
+
+		// header
+		rl.DrawRectangle(modalX, modalY, modalW, 60, ModernDark)
+
+		DrawText("Open File", int(modalX)+20, int(modalY)+20, 14, rl.DrawPixel, "white")
 
 		for _, ib := range ui.InputBoxes {
 			ib.Draw()
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Cancel", modalX+modalW-180, modalY+modalH-50, 80, 32, ModernText, ModernDanger, ModernLight, ModernMedium, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Open", modalX+modalW-90, modalY+modalH-50, 80, 32, ModernText, ModernSuccess, ModernLight, ModernMedium, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 				fmt.Printf("open: %s\n", filename)
@@ -307,7 +528,6 @@ func DrawModal(ui *UIState) {
 					clearTextGrid()
 					cursor.reset()
 					loadStringIntoTextGrid("File Doesn't Exist!!!")
-					// DrawText("File Doesn't Exist.", 0, editorTopPadding, CHAR_IMAGE_WIDTH, rl.DrawPixel, "white")
 				}
 				fmt.Println("Loaded ", res, " bytes into text grid")
 			}
@@ -320,21 +540,30 @@ func DrawModal(ui *UIState) {
 		modalW := int32(windowWidth - 200)
 		modalH := int32(windowHeight - 150)
 
-		rl.DrawRectangle(modalX, modalY, modalW, modalH, rl.DarkBrown)
-		rl.DrawRectangleLines(modalX, modalY, modalW, modalH, rl.Black)
+		// draw modal blur
+		rl.DrawRectangle(0, 0, int32(windowWidth), int32(windowHeight), rl.NewColor(0, 0, 0, 128))
 
-		DrawText("Save As", int(modalX)+10, int(modalY)+10, 10, rl.DrawPixel, "black")
+		// draw shadow
+		drawShadow(float32(modalX), float32(modalY), float32(modalW), float32(modalH), 6, 12)
+
+		// draw modal panel
+		rl.DrawRectangle(modalX, modalY, modalW, modalH, ModernMedium)
+
+		// header
+		rl.DrawRectangle(modalX, modalY, modalW, 60, ModernDark)
+
+		DrawText("Save As", int(modalX)+20, int(modalY)+20, 14, rl.DrawPixel, "white")
 
 		for _, ib := range ui.InputBoxes {
 			ib.Draw()
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Cancel", modalX+modalW-180, modalY+modalH-50, 80, 32, ModernText, ModernDanger, ModernLight, ModernMedium, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Save", modalX+modalW-90, modalY+modalH-50, 80, 32, ModernText, ModernSuccess, ModernLight, ModernMedium, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 				err := saveTextGridToFile(filename)
@@ -354,21 +583,30 @@ func DrawModal(ui *UIState) {
 		modalW := int32(windowWidth - 200)
 		modalH := int32(windowHeight - 150)
 
-		rl.DrawRectangle(modalX, modalY, modalW, modalH, rl.DarkBrown)
-		rl.DrawRectangleLines(modalX, modalY, modalW, modalH, rl.Black)
+		// draw modal blur
+		rl.DrawRectangle(0, 0, int32(windowWidth), int32(windowHeight), rl.NewColor(0, 0, 0, 128))
 
-		DrawText("Create Note", int(modalX)+10, int(modalY)+10, 10, rl.DrawPixel, "black")
+		// draw shadow
+		drawShadow(float32(modalX), float32(modalY), float32(modalW), float32(modalH), 6, 12)
+
+		// draw modal panel
+		rl.DrawRectangle(modalX, modalY, modalW, modalH, ModernMedium)
+
+		// header
+		rl.DrawRectangle(modalX, modalY, modalW, 60, ModernDark)
+
+		DrawText("Create Note", int(modalX)+20, int(modalY)+20, 14, rl.DrawPixel, "white")
 
 		for _, ib := range ui.InputBoxes {
 			ib.Draw()
 			ib.HandleInput()
 		}
 
-		if DrawButton("Cancel", modalX+modalW-80, modalY+modalH-40, 70, 30, "white", rl.Red, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Cancel", modalX+modalW-180, modalY+modalH-50, 80, 32, ModernText, ModernDanger, ModernLight, ModernMedium, true) {
 			ui.ModalOpen = ""
 		}
 
-		if DrawButton("OK", modalX+modalW-160, modalY+modalH-40, 70, 30, "white", rl.Green, rl.Gray, rl.DarkGray, true) {
+		if DrawModernButton("Create", modalX+modalW-90, modalY+modalH-50, 80, 32, ModernText, ModernSuccess, ModernLight, ModernMedium, true) {
 			if len(ui.InputBoxes) > 0 {
 				filename := ui.InputBoxes[0].Text
 
@@ -439,17 +677,20 @@ func DrawModal(ui *UIState) {
 			ui.ModalOpen = ""
 		}
 	}
-
 }
 
 func DrawStatusBar(cursor Cursor) {
 	barHeight := editorBottomPadding
-	rl.DrawRectangle(0, int32(windowHeight)-int32(barHeight), int32(windowWidth), int32(barHeight), rl.DarkGray)
+
+	// modern gradient background
+	rl.DrawRectangle(0, int32(windowHeight)-int32(barHeight), int32(windowWidth), int32(barHeight), ModernDark)
+	rl.DrawRectangle(0, int32(windowHeight)-int32(barHeight), int32(windowWidth), 2, ModernAccent)
+
 	status := fmt.Sprintf("Ln %d, Col %d Buffer: %s | Status: %s", cursor.y+1, cursor.x+1, currentFile, editorStatus)
-	DrawText(status, 5, windowHeight-barHeight+5, CHAR_IMAGE_WIDTH, rl.DrawPixel, "white")
+	DrawText(status, 12, windowHeight-barHeight+5, CHAR_IMAGE_WIDTH, rl.DrawPixel, "white")
 }
 
-func DrawButton(label string, x, y, w, h int32, textColor_ string, pressColor, hoverColor, idleColor rl.Color, padding bool) bool {
+func DrawModernButton(label string, x, y, w, h int32, textColor rl.Color, pressColor, hoverColor, idleColor rl.Color, padding bool) bool {
 	mouseX := rl.GetMouseX()
 	mouseY := rl.GetMouseY()
 	mouseOver := mouseX >= x && mouseX <= x+w && mouseY >= y && mouseY <= y+h
@@ -464,18 +705,41 @@ func DrawButton(label string, x, y, w, h int32, textColor_ string, pressColor, h
 		bgColor = idleColor
 	}
 
+	// draw square button
 	rl.DrawRectangle(x, y, w, h, bgColor)
-	rl.DrawRectangleLines(x, y, w, h, rl.Black)
 
-	if padding {
-		textSize := rl.MeasureText(label, 12)
-		textX := x + (w-int32(textSize))/4
-		textY := y + (h-10)/2
-		DrawText(label, int(textX), int(textY), CHAR_IMAGE_WIDTH, rl.DrawPixel, textColor_)
-	} else {
-		DrawText(label, int(x)+editorXPadding, int(y)+5, CHAR_IMAGE_WIDTH, rl.DrawPixel, textColor_)
-
-	}
+	// simple text positioning - always left aligned with padding
+	// keeping padding bool as i cant be bothered to rewrite
+	// TODO: remove unused padding bool
+	DrawText(label, int(x)+8, int(y)+int(h)/2-5, CHAR_IMAGE_WIDTH, rl.DrawPixel, "white")
 
 	return mouseOver && pressed
+}
+
+func isCellSelected(x, y int) bool {
+	if !selection.Active {
+		return false
+	}
+
+	startX, startY := selection.StartX, selection.StartY
+	endX, endY := selection.EndX, selection.EndY
+
+	// normalize coordinates
+	if startY > endY || (startY == endY && startX > endX) {
+		startX, endX = endX, startX
+		startY, endY = endY, startY
+	}
+
+	if y < startY || y > endY {
+		return false
+	}
+
+	if y == startY && y == endY {
+		return x >= startX && x <= endX
+	} else if y == startY {
+		return x >= startX
+	} else if y == endY {
+		return x <= endX
+	}
+	return true
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"golang.design/x/clipboard"
 )
 
 var scrollOffsetX int = 0
@@ -23,6 +24,9 @@ func getRowWidth(row int) int {
 	}
 	maxX := 0
 	for i := 0; i < editorCols; i++ {
+		if textGrid[row][i] == '\n' {
+			return i
+		}
 		if textGrid[row][i] != 0 {
 			maxX = i + 1
 		}
@@ -137,6 +141,32 @@ func handleEditorInput(cursor *Cursor) {
 		}
 	}
 
+	if rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl) {
+		// Copy
+		if rl.IsKeyPressed(rl.KeyC) && selection.Active {
+			editorClipboard = getSelectedText()
+			// rl.SetClipboardText(editorClipboard)
+			clipboard.Write(clipboard.FmtText, []byte(editorClipboard))
+		}
+
+		// Paste
+		if rl.IsKeyPressed(rl.KeyV) && editorClipboard != "" {
+			ensureGridCapacityForPaste(cursor.x, cursor.y, editorClipboard)
+			insertStringAtCursor(editorClipboard)
+			selection.Active = false
+			ensureCursorVisible(cursor)
+		}
+
+		if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)) && rl.IsKeyPressed(rl.KeyA) {
+			selection.Active = true
+			selection.StartX = 0
+			selection.StartY = 0
+			selection.EndY = editorRows - 1
+			selection.EndX = editorCols - 1
+		}
+
+	}
+
 	for char := rl.GetCharPressed(); char > 0; char = rl.GetCharPressed() {
 		if char >= 32 && char <= 126 {
 			cursor.insert(byte(char))
@@ -214,8 +244,7 @@ func handleEditorInput(cursor *Cursor) {
 	if rl.IsKeyPressed(rl.KeyHome) {
 		if rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl) {
 			// Ctrl+Home: Go to beginning of document
-			cursor.x = 0
-			cursor.y = 0
+			cursor.reset()
 		} else {
 			// Home: Go to beginning of line
 			cursor.x = 0
@@ -236,6 +265,45 @@ func handleEditorInput(cursor *Cursor) {
 	}
 
 	// ----- gen`1`
+}
+
+func getSelectedText() string {
+	if !selection.Active {
+		return ""
+	}
+
+	startX, startY := selection.StartX, selection.StartY
+	endX, endY := selection.EndX, selection.EndY
+
+	if startY > endY || (startY == endY && startX > endX) {
+		startX, endX = endX, startX
+		startY, endY = endY, startY
+	}
+
+	result := ""
+
+	for y := startY; y <= endY; y++ {
+		lineStart := 0
+		lineEnd := editorCols - 1
+
+		if y == startY {
+			lineStart = startX
+		}
+		if y == endY {
+			lineEnd = endX
+		}
+
+		for x := lineStart; x <= lineEnd; x++ {
+			ch := textGrid[y][x]
+			if ch == 0 {
+				break
+			}
+			result += string(ch)
+		}
+
+	}
+
+	return result
 }
 
 func drawScrollIndicators() {
