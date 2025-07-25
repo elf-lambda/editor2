@@ -302,11 +302,21 @@ func saveTextGridToFile(path string) error {
 // ------------------------------------------------------------------------------------
 
 type Selection struct {
-	Active bool
-	StartX int
-	StartY int
-	EndX   int
-	EndY   int
+	Active      bool
+	StartX      int
+	StartY      int
+	EndX        int
+	EndY        int
+	ArrowSelect bool
+}
+
+func (s *Selection) reset() {
+	s.Active = false
+	s.StartX = 0
+	s.StartY = 0
+	s.EndX = 0
+	s.EndY = 0
+	s.ArrowSelect = false
 }
 
 var selection Selection

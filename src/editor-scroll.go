@@ -147,6 +147,7 @@ func handleEditorInput(cursor *Cursor) {
 			editorClipboard = getSelectedText()
 			// rl.SetClipboardText(editorClipboard)
 			clipboard.Write(clipboard.FmtText, []byte(editorClipboard))
+			selection.reset()
 		}
 
 		// Paste
@@ -166,6 +167,59 @@ func handleEditorInput(cursor *Cursor) {
 		}
 
 	}
+	// selection arrows
+	if rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift) {
+		if rl.IsKeyPressed(rl.KeyLeft) || rl.IsKeyPressedRepeat(rl.KeyLeft) {
+			selection.Active = true
+			if !selection.ArrowSelect {
+				selection.StartX = cursor.x
+				selection.StartY = cursor.y
+				selection.ArrowSelect = true
+			}
+			selection.EndX = cursor.x - 1
+			selection.EndY = cursor.y
+			cursor.moveLeft()
+			return
+
+		}
+		if rl.IsKeyPressed(rl.KeyRight) || rl.IsKeyPressedRepeat(rl.KeyRight) {
+			selection.Active = true
+			if !selection.ArrowSelect {
+				selection.StartX = cursor.x
+				selection.StartY = cursor.y
+				selection.ArrowSelect = true
+			}
+			selection.EndX = cursor.x + 1
+			selection.EndY = cursor.y
+			cursor.moveRight()
+			return
+		}
+		if rl.IsKeyPressed(rl.KeyUp) || rl.IsKeyPressedRepeat(rl.KeyUp) {
+			selection.Active = true
+			if !selection.ArrowSelect {
+				selection.StartX = cursor.x
+				selection.StartY = cursor.y
+				selection.ArrowSelect = true
+			}
+			cursor.moveUp()
+			selection.EndX = cursor.x
+			selection.EndY = cursor.y
+			return
+		}
+		if rl.IsKeyPressed(rl.KeyDown) || rl.IsKeyPressedRepeat(rl.KeyDown) {
+			selection.Active = true
+			if !selection.ArrowSelect {
+				selection.StartX = cursor.x
+				selection.StartY = cursor.y
+				selection.ArrowSelect = true
+			}
+			cursor.moveDown()
+			selection.EndX = cursor.x
+			selection.EndY = cursor.y
+			return
+		}
+
+	}
 
 	for char := rl.GetCharPressed(); char > 0; char = rl.GetCharPressed() {
 		if char >= 32 && char <= 126 {
@@ -178,34 +232,40 @@ func handleEditorInput(cursor *Cursor) {
 
 	if rl.IsKeyPressed(rl.KeyEnter) {
 		cursor.enter()
+		selection.reset()
 		ensureCursorVisible(cursor)
 	}
 
 	if rl.IsKeyPressed(rl.KeyBackspace) || rl.IsKeyPressedRepeat(rl.KeyBackspace) {
 		cursor.backspace()
+		selection.reset()
 		ensureCursorVisible(cursor)
 	}
 
 	if rl.IsKeyPressed(rl.KeyLeft) || rl.IsKeyPressedRepeat(rl.KeyLeft) {
 		cursor.moveLeft()
+		selection.reset()
 		ensureCursorVisible(cursor)
 		// time.Sleep(33 * time.Millisecond)
 	}
 
 	if rl.IsKeyPressed(rl.KeyRight) || rl.IsKeyPressedRepeat(rl.KeyRight) {
 		cursor.moveRight()
+		selection.reset()
 		ensureCursorVisible(cursor)
 		// time.Sleep(33 * time.Millisecond)
 	}
 
 	if rl.IsKeyPressed(rl.KeyUp) || rl.IsKeyPressedRepeat(rl.KeyUp) {
 		cursor.moveUp()
+		selection.reset()
 		ensureCursorVisible(cursor)
 		// time.Sleep(33 * time.Millisecond)
 	}
 
 	if rl.IsKeyPressed(rl.KeyDown) || rl.IsKeyPressedRepeat(rl.KeyDown) {
 		cursor.moveDown()
+		selection.reset()
 		ensureCursorVisible(cursor)
 		// time.Sleep(33 * time.Millisecond)
 	}
