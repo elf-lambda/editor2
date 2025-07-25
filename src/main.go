@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"sync"
@@ -10,9 +12,9 @@ import (
 )
 
 func main() {
-	// go func() {
-	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
-	// }()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	var file string
 	if len(os.Args) > 1 {
@@ -35,56 +37,58 @@ func main() {
 		if ui.ModalOpen == "" {
 			handleEditorInput(cursor)
 
-			// handle mouse click to reposition cursor
-			if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-				// start selection
-				mouseX := rl.GetMouseX()
-				mouseY := rl.GetMouseY()
+			if ui.ModalOpen == "" {
+				// handle mouse click to reposition cursor
+				if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+					// start selection
+					mouseX := rl.GetMouseX()
+					mouseY := rl.GetMouseY()
 
-				gridX := (int(mouseX) - editorXPadding) / CHAR_IMAGE_WIDTH
-				gridY := (int(mouseY) - editorTopPadding) / CHAR_IMAGE_HEIGHT
+					gridX := (int(mouseX) - editorXPadding) / CHAR_IMAGE_WIDTH
+					gridY := (int(mouseY) - editorTopPadding) / CHAR_IMAGE_HEIGHT
 
-				gridX += scrollOffsetX
-				gridY += scrollOffsetY
+					gridX += scrollOffsetX
+					gridY += scrollOffsetY
 
-				if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
-					cursor.MoveToClick(gridX, gridY)
+					if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
+						cursor.MoveToClick(gridX, gridY)
 
-					selection.Active = true
-					selection.StartX = gridX
-					selection.StartY = gridY
-					selection.EndX = gridX
-					selection.EndY = gridY
+						selection.Active = true
+						selection.StartX = gridX
+						selection.StartY = gridY
+						selection.EndX = gridX
+						selection.EndY = gridY
+					}
 				}
-			}
 
-			if rl.IsMouseButtonDown(rl.MouseLeftButton) && selection.Active {
-				mouseX := rl.GetMouseX()
-				mouseY := rl.GetMouseY()
+				if rl.IsMouseButtonDown(rl.MouseLeftButton) && selection.Active {
+					mouseX := rl.GetMouseX()
+					mouseY := rl.GetMouseY()
 
-				gridX := (int(mouseX) - editorXPadding) / CHAR_IMAGE_WIDTH
-				gridY := (int(mouseY) - editorTopPadding) / CHAR_IMAGE_HEIGHT
+					gridX := (int(mouseX) - editorXPadding) / CHAR_IMAGE_WIDTH
+					gridY := (int(mouseY) - editorTopPadding) / CHAR_IMAGE_HEIGHT
 
-				gridX += scrollOffsetX
-				gridY += scrollOffsetY
+					gridX += scrollOffsetX
+					gridY += scrollOffsetY
 
-				if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
-					selection.EndX = gridX
-					selection.EndY = gridY
+					if gridX >= 0 && gridX < visibleCols && gridY >= 0 && gridY < visibleRows {
+						selection.EndX = gridX
+						selection.EndY = gridY
+					}
 				}
-			}
 
-			if rl.IsMouseButtonReleased(rl.MouseLeftButton) && selection.Active {
-				if selection.StartX == selection.EndX && selection.StartY == selection.EndY {
-					selection.Active = false // No drag = no selection
-					// ensureCursorVisible(cursor)
+				if rl.IsMouseButtonReleased(rl.MouseLeftButton) && selection.Active {
+					if selection.StartX == selection.EndX && selection.StartY == selection.EndY {
+						selection.Active = false // No drag = no selection
+						// ensureCursorVisible(cursor)
+						clampCursor()
+						continue
+					}
+					cursor.x = selection.EndX
+					cursor.y = selection.EndY
 					clampCursor()
-					continue
+					// ensureCursorVisible(cursor)
 				}
-				cursor.x = selection.EndX
-				cursor.y = selection.EndY
-				clampCursor()
-				// ensureCursorVisible(cursor)
 			}
 
 		}

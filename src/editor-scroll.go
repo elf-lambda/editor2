@@ -23,7 +23,7 @@ func getRowWidth(row int) int {
 		return 0
 	}
 	maxX := 0
-	for i := 0; i < visibleCols; i++ {
+	for i := 0; i < editorCols; i++ {
 		if textGrid[row][i] == '\n' {
 			return i
 		}

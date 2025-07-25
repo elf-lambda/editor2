@@ -321,6 +321,8 @@ func clearTextGrid() {
 	textGrid = getTextGrid(editorRows_, editorCols_)
 	visibleRows = editorRows_
 	visibleCols = editorCols_
+	editorCols = editorCols_
+	editorRows = editorRows_
 	usedRows = 1
 	cursor.reset()
 	editorStatus = "New Buffer Created"
