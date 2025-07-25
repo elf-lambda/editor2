@@ -25,7 +25,7 @@ func getRowWidth(row int) int {
 	maxX := 0
 	for i := 0; i < editorCols; i++ {
 		if textGrid[row][i] == '\n' {
-			return i
+			return i + 1
 		}
 		if textGrid[row][i] != 0 {
 			maxX = i + 1
@@ -106,6 +106,7 @@ func handleEditorInput(cursor *Cursor) {
 			if scrollOffsetX > maxScrollX {
 				scrollOffsetX = maxScrollX
 			}
+			// ensureCursorVisible(cursor)
 		} else {
 			// vertical scrolling
 			scrollOffsetY -= int(mouseWheel * 3) // 3 lines at a time
@@ -119,6 +120,7 @@ func handleEditorInput(cursor *Cursor) {
 			if scrollOffsetY > maxScrollY {
 				scrollOffsetY = maxScrollY
 			}
+			// ensureCursorVisible(cursor)
 		}
 	}
 
@@ -358,7 +360,7 @@ func getSelectedText() string {
 
 	for y := startY; y <= endY; y++ {
 		lineStart := 0
-		lineEnd := visibleCols - 1
+		lineEnd := editorCols - 1
 
 		if y == startY {
 			lineStart = startX
@@ -376,7 +378,7 @@ func getSelectedText() string {
 		}
 
 	}
-
+	fmt.Println("getSelectedText: ", result)
 	return result
 }
 

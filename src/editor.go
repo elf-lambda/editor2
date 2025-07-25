@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -319,6 +320,7 @@ func clearTextGrid() {
 	var editorRows_ int = windowHeight / CHAR_IMAGE_HEIGHT // >
 	fmt.Println("Resizing textGrid to Cols:", editorCols_, "Rows:", editorRows_)
 	textGrid = getTextGrid(editorRows_, editorCols_)
+	runtime.GC()
 	visibleRows = editorRows_
 	visibleCols = editorCols_
 	editorCols = editorCols_
@@ -748,7 +750,7 @@ func (c *Cursor) clampXToLineEnd() {
 	maxX := 0
 	for i := 0; i < editorCols; i++ {
 		if textGrid[c.y][i] != 0 {
-			maxX = i + 1
+			maxX = i
 		}
 	}
 	if c.x > maxX {
@@ -797,7 +799,8 @@ func clampCursor() {
 }
 
 func growTextGrid() {
-	newRows := editorRows * 2
+	const growRows = 100
+	newRows := editorRows + growRows
 	newGrid := make([][]byte, newRows)
 
 	// copy old rows
