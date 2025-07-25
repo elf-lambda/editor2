@@ -132,10 +132,11 @@ func insertStringAt(x, y int, s string) {
 
 func listNoteFiles(dir string, foldersOnly bool) []string {
 	// Old --- to refactor
-	os.MkdirAll("notes", os.ModePerm)
+	os.MkdirAll("/home/void/notes", os.ModePerm)
 
-	files, err := os.ReadDir(dir)
+	files, err := os.ReadDir("/home/void/" + dir)
 	if err != nil {
+		fmt.Println("error reading dir listnotefiles")
 		return nil
 	}
 	var entries []string

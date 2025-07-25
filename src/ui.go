@@ -265,7 +265,7 @@ func DrawNotesPanel(ui *UIState) {
 				ui.NotesScroll = 0
 			} else {
 				// file clicked
-				fullPath := "notes/" + ui.NotesPath + entry
+				fullPath := "/home/void/notes/" + ui.NotesPath + entry
 				clearTextGrid()
 				loadFileIntoTextGrid(fullPath)
 				cursor.reset()
@@ -353,7 +353,14 @@ func DrawFilePickerPanel(ui *UIState) {
 			// handle file selection here
 			fullPath := filepath.Join(ui.CurrentPath, ui.SelectedFile)
 			// clearTextGrid()
-			loadFileIntoTextGrid(fullPath)
+			code, err := loadFileIntoTextGrid(fullPath)
+			if code == -1 || err != nil {
+				currentFile = "Untitled"
+				loadStringIntoTextGrid(err.Error())
+				ensureCursorVisible(cursor)
+				ui.ShowFilePicker = false
+				return
+			}
 			// cursor.reset()
 			currentFile = fullPath
 			editorStatus = "Loaded: " + ui.SelectedFile
@@ -458,7 +465,24 @@ func DrawDropdown(menu string, x, y int32, ui *UIState) {
 				}
 			case "Save":
 				fmt.Println("Save triggered (implement me!)")
-				saveTextGridToFile(currentFile)
+				if currentFile == "Untitled" {
+					ui.ModalOpen = "SaveAs"
+					ui.InputBoxes = []*InputBox{
+						{
+							Rect:     rl.NewRectangle(150, 150, 300, 40),
+							Text:     "",
+							MaxChars: 64,
+						},
+					}
+					continue
+				}
+				err := saveTextGridToFile(currentFile)
+				if err != nil {
+					currentFile = "Untitled"
+					loadStringIntoTextGrid(err.Error())
+					ui.ActiveMenu = ""
+					return
+				}
 				editorStatus = "Saved File!"
 			case "Save As...":
 				ui.ModalOpen = "SaveAs"
@@ -525,9 +549,12 @@ func DrawModal(ui *UIState) {
 				fmt.Printf("open: %s\n", filename)
 				res, err := loadFileIntoTextGrid(filename)
 				if err != nil {
-					clearTextGrid()
-					cursor.reset()
-					loadStringIntoTextGrid("File Doesn't Exist!!!")
+					currentFile = "Untitled"
+					// clearTextGrid()
+					// cursor.reset()
+					loadStringIntoTextGrid(err.Error())
+					ui.ModalOpen = ""
+					return
 				}
 				fmt.Println("Loaded ", res, " bytes into text grid")
 			}
@@ -568,7 +595,10 @@ func DrawModal(ui *UIState) {
 				filename := ui.InputBoxes[0].Text
 				err := saveTextGridToFile(filename)
 				if err != nil {
-					fmt.Println("Error saving file:", err)
+					currentFile = "Untitled"
+					loadStringIntoTextGrid(err.Error())
+					ui.ModalOpen = ""
+					return
 				} else {
 					fmt.Println("File saved as", filename)
 					currentFile = filename
@@ -612,15 +642,15 @@ func DrawModal(ui *UIState) {
 
 				now := time.Now()
 				folderName := now.Format("01-2006")
-				baseDir, err := os.Getwd()
-				if err != nil {
-					fmt.Printf("Error getting current working directory: %v\n", err)
-					return
-				}
+				baseDir := "/home/void/"
+				// if err != nil {
+				// 	fmt.Printf("Error getting current working directory: %v\n", err)
+				// 	return
+				// }
 
 				folderPath := filepath.Join(baseDir, "notes/"+folderName)
 				fmt.Printf("Attempting to create folder: %s\n", folderPath)
-				_, err = os.Stat(folderPath)
+				_, err := os.Stat(folderPath)
 				if os.IsNotExist(err) {
 					err = os.MkdirAll(folderPath, 0755)
 					if err != nil {
@@ -668,7 +698,10 @@ func DrawModal(ui *UIState) {
 
 				err = saveTextGridToFile(filePath)
 				if err != nil {
-					fmt.Println("Error saving file:", err)
+					currentFile = "Untitled"
+					loadStringIntoTextGrid(err.Error())
+					ui.ModalOpen = ""
+					return
 				} else {
 					fmt.Println("File saved as", filePath)
 					currentFile = filePath

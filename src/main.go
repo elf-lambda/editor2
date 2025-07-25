@@ -12,7 +12,11 @@ func main() {
 	var file string
 	if len(os.Args) > 1 {
 		file = os.Args[1]
-		loadFileIntoTextGrid(file)
+		code, err := loadFileIntoTextGrid(file)
+		if code == -1 {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
 
 	rl.InitWindow(int32(windowWidth), int32(windowHeight), "Text Editor")
