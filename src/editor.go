@@ -520,6 +520,13 @@ func (c *Cursor) moveLeft() {
 		}
 		c.x = 0
 	}
+	if c.x < 0 {
+		c.x = 0
+	}
+	if c.y < 0 {
+		c.y = 0
+	}
+
 	fmt.Println(c)
 }
 
@@ -541,11 +548,17 @@ func (c *Cursor) moveRight() {
 		c.y++
 		c.x = 0
 	}
+	if c.x < 0 {
+		c.x = 0
+	}
+	if c.y < 0 {
+		c.y = 0
+	}
+
 	fmt.Println(c)
 }
 
 func (c *Cursor) moveUp() {
-
 	if c.y > 0 {
 		c.y--
 		if c.x > editorCols {
@@ -555,11 +568,17 @@ func (c *Cursor) moveUp() {
 			c.clampXToLineEnd()
 		}
 	}
+	if c.x < 0 {
+		c.x = 0
+	}
+	if c.y < 0 {
+		c.y = 0
+	}
+
 	fmt.Println(c)
 }
 
 func (c *Cursor) moveDown() {
-
 	if c.y < usedRows-1 {
 		c.y++
 		if c.x > editorCols {
@@ -569,6 +588,13 @@ func (c *Cursor) moveDown() {
 			c.clampXToLineEnd()
 		}
 	}
+	if c.x < 0 {
+		c.x = 0
+	}
+	if c.y < 0 {
+		c.y = 0
+	}
+
 	fmt.Println(c)
 }
 
