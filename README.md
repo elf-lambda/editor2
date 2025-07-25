@@ -13,6 +13,10 @@ A custom graphical text editor built from the ground up, implementing font rende
 - **Native UI Components**: All UI elements built using raw Raylib primitives
 - **Text Editing**: Full cursor navigation and text manipulation
 - **Opening/Saving Files**
+- **File/Directory Picker**: GUI File picker / directory navigator
+- **Text selection/deletion**
+- **Text copy/paste, Selection copy/paste**
+- **Daily Note Taking ui options**: Allows to automatically create dd-mm-yyyy files to take notes
 
 ## Building
 
