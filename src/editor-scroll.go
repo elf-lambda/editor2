@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.design/x/clipboard"
@@ -144,6 +145,12 @@ func handleEditorInput(cursor *Cursor) {
 	}
 
 	if rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl) {
+		// Exit
+		if rl.IsKeyPressed(rl.KeyQ) {
+
+			os.Exit(1)
+		}
+
 		// Copy
 		if rl.IsKeyPressed(rl.KeyC) && selection.Active {
 			editorClipboard = getSelectedText()
