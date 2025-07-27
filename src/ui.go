@@ -282,7 +282,7 @@ func DrawNotesPanel(ui *UIState) {
 
 func DrawFilePickerPanel(ui *UIState) {
 	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
-	panelW, panelH := int32(windowWidth/2), int32(windowHeight/2)
+	panelW, panelH := int32(windowWidth/2)+50, int32(windowHeight/2)
 	entryHeight := int32(28)
 	maxVisible := int(panelH-80) / int(entryHeight)
 
