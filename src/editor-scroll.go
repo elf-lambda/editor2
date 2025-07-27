@@ -112,6 +112,7 @@ func handleEditorInput(cursor *Cursor) {
 			// vertical scrolling
 			scrollOffsetY -= int(mouseWheel * 3) // 3 lines at a time
 			maxScrollY := usedRows - getVisibleRows()
+			maxScrollY += 15 // scroll extra 15 lines when available
 			if maxScrollY < 0 {
 				maxScrollY = 0
 			}
