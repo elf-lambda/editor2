@@ -17,8 +17,8 @@ const editorYPadding int = 5
 const editorTopPadding int = 30
 const editorBottomPadding int = 20
 
-const windowHeight int = 460
-const windowWidth int = 640
+var windowHeight int = 460
+var windowWidth int = 640
 
 var visibleCols int = windowWidth / CHAR_IMAGE_WIDTH
 var visibleRows int = windowHeight / CHAR_IMAGE_HEIGHT

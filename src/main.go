@@ -26,6 +26,7 @@ func main() {
 		}
 	}
 
+	rl.SetConfigFlags(rl.FlagWindowResizable)
 	rl.InitWindow(int32(windowWidth), int32(windowHeight), "Text Editor")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
@@ -34,6 +35,10 @@ func main() {
 	var clipboardMutex sync.Mutex
 
 	for !rl.WindowShouldClose() {
+		if rl.IsWindowResized() {
+			windowHeight = rl.GetScreenHeight()
+			windowWidth = rl.GetScreenWidth()
+		}
 		if ui.ModalOpen == "" {
 			handleEditorInput(cursor)
 

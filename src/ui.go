@@ -155,7 +155,7 @@ func DrawMenuBar(ui *UIState) {
 
 func DrawNotesPanel(ui *UIState) {
 	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
-	panelW, panelH := int32(400), int32(300)
+	panelW, panelH := int32(windowWidth/2), int32(windowHeight/2)
 	entryHeight := int32(28)
 	maxVisible := int(panelH-80) / int(entryHeight)
 
@@ -282,7 +282,7 @@ func DrawNotesPanel(ui *UIState) {
 
 func DrawFilePickerPanel(ui *UIState) {
 	panelX, panelY := int32(windowWidth/2/3), int32(windowHeight/2/3)
-	panelW, panelH := int32(400), int32(300)
+	panelW, panelH := int32(windowWidth/2), int32(windowHeight/2)
 	entryHeight := int32(28)
 	maxVisible := int(panelH-80) / int(entryHeight)
 
